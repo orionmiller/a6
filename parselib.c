@@ -49,23 +49,21 @@ int isNormalTokenChar (char c) {
    return paranormal[i] != c;
 }
 
-mushStage parseLine(FILE *fp) {
+mushStage parseLine(FILE *fp, char **in, char **out, int *stages) {
    char *start = read_long_line(fp);
    char *word = (char *) safe_malloc(DEFAULT_SIZE);
    mushStage s = (mushStage) safe_malloc(sizeof(struct mush_stage));
    mushStage front = s;
    char **end = (char **) safe_malloc(sizeof(char**));
    mushToken token = END_OF_LINE;
-   int stage = 0;
+   /*int stage = 0;*/
    char *exec = NULL; /*bad name*/
    int bool = 1;
-   int in = 0;
-   int out = 0;
-   const int REDIR_T = 1;
-   const int PIPE_T = 2;
    int max_argc = DEFAULT_NUM_ARGS;
    int size = DEFAULT_SIZE;   
+
    s = initMushStage(s);
+
 
    do {
       parse(&start, &end, &token, &word);
@@ -84,6 +82,7 @@ mushStage parseLine(FILE *fp) {
                max_argc *= 2;
                *(s->argv) = (char *) safe_realloc(*(s->argv), 
                   sizeof(char *) * max_argc);
+               bzero(s->argv+s->argc+1, max_argc - (s->argc + 1));
             }
             s->argc += 1;
             break;
@@ -96,17 +95,17 @@ mushStage parseLine(FILE *fp) {
             s->command = long_line_cat(s->command, " ", SAME, &size);
             if (token != NORMAL_TOKEN) {
                fprintf(stderr, "%s: bad out redirection\n", exec);
-               exit(EXIT_FAILURE);
+               return NULL;
             }
 
-            if (out == REDIR_T || out == PIPE_T) {
+            if (*out) {
                fprintf(stderr, "%s: bad out redirection\n", exec);
-               exit(EXIT_FAILURE);
+               return NULL;
             }
 
-            s->out = (char *) safe_malloc(strlen(word)+1); /*+1 for null*/
-            snprintf(s->out, strlen(word)+1, "%s", word);
-            in = REDIR_T;
+            *out = (char *) safe_malloc(strlen(word)+1); /*+1 for null*/
+            snprintf(*out, strlen(word)+1, "%s", word);
+
             break;
 
          case IN_REDIR:
@@ -118,16 +117,15 @@ mushStage parseLine(FILE *fp) {
 
             if (token != NORMAL_TOKEN) {
                fprintf(stderr, "%s: bad input redirection\n", exec);
-               exit(EXIT_FAILURE);
+               return NULL;
             }
-            if (in == REDIR_T || in == PIPE_T) {
+            if (*in){
                fprintf(stderr, "%s: bad input redirection\n", exec);
-               exit(EXIT_FAILURE);
+               return NULL;
             }
 
-            s->in = (char *) safe_malloc(strlen(word)+1); /*+1 for null*/
-            snprintf(s->in, strlen(word)+1, "%s", word);
-            in = REDIR_T;
+            *in = (char *) safe_malloc(strlen(word)+1); /*+1 for null*/
+            snprintf(*in, strlen(word)+1, "%s", word);
             break;
 
 
@@ -135,57 +133,31 @@ mushStage parseLine(FILE *fp) {
             parse(&start, &end, &token, &word);
             if (token != NORMAL_TOKEN) {
                fprintf(stderr, "ivalid null argument\n");
-               exit(EXIT_FAILURE);
-            }
-            if (in == REDIR_T) {
-               fprintf(stderr, "%s: ambiguous input\n", exec);
-               exit(EXIT_FAILURE);
-            }
-            if (out == REDIR_T) {
-               fprintf(stderr, "%s: ambiguous output\n", exec);
-            }
-
-            if (!(s->in)) {
-               s->in = (char *) safe_malloc(sizeof("original stdin"));
-               snprintf(s->in, sizeof("original stdin"), "%s", 
-                        "original stdin");
+               return NULL;
             }
 
             exec = word;
-            s->out = short_line(itoa(stage+1), "pipe to stage ");
             s->next = (mushStage) safe_malloc(sizeof(struct mush_stage));
             s->next = initMushStage(s->next);
-            s->next->in = short_line(itoa(stage), "pipe from stage ");
             s = s->next;
             size = DEFAULT_SIZE;
             s->command = long_line_cat(s->command, word, CLEAN, &size);
             s->argv[s->argc] = word;
             s->argc += 1;
-            stage++;
-            in = PIPE_T;
-            out = PIPE_T;
+            (*stages)++;
             break;
 
          case END_OF_LINE:
             if (!(*(s->command))) {
                fprintf(stderr, "invalid null command\n");
-               exit(EXIT_FAILURE);
+               return NULL;
             }
-            if (!(s->in)) {
-               s->in = (char *) safe_malloc(sizeof("original stdin"));
-               snprintf(s->in, sizeof("original stdin"), "%s", 
-                        "original stdin");
-            }
-            if (!(s->out)) {
-               s->out = (char *) safe_malloc(sizeof("original stdout"));
-               snprintf(s->out, sizeof("original stdout"), "%s", 
-                        "original stdout");
-            }
+
             break;
 
          default: /*may want to remove*/
             fprintf(stderr, "error handling tokens");
-            exit(EXIT_FAILURE);
+            return NULL;
             break;
          }
    
@@ -218,12 +190,10 @@ int isDelim(char c) {
 }
 
 mushStage initMushStage(mushStage stage) {
-   stage->in = NULL;
-   stage->out = NULL;
    stage->command = (char *) clean_malloc(sizeof(char) * DEFAULT_SIZE);
    stage->argc = 0;
    stage->argv = (char **) safe_malloc(sizeof(char **));
-   *(stage->argv) = (char *) safe_malloc(sizeof(char *)* DEFAULT_NUM_ARGS);
+   *(stage->argv) = (char *) clean_malloc(sizeof(char *)* DEFAULT_NUM_ARGS);
    stage->next = NULL;
    return stage;
 }
@@ -234,8 +204,8 @@ void printStage(mushStage stage, int num) {
    printf("--------\n");
    printf("Stage %d: \"%s\"\n", num, stage->command);
    printf("--------\n");
-   printf("input: %s \n", stage->in);
-   printf("output: %s\n", stage->out);
+   /*   printf("input: %s \n", stage->in);
+        printf("output: %s\n", stage->out);*/
    printf("argc: %d\n", stage->argc);
    printf("argv: ");
    for (i = 0; i < stage->argc; i++) {
@@ -247,6 +217,3 @@ void printStage(mushStage stage, int num) {
    }
    printf("\n\n");
 }
-
-
-

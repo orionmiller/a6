@@ -19,7 +19,7 @@ typedef enum mush_token {
 
 
 typedef struct mush_stage {
-   char *in, *out;
+   /*char *in, *out;*/
    char *command;
    int argc;
    char **argv;
@@ -53,7 +53,7 @@ mushToken nextToken(char *line, char **end);
 /* parseLine takes in a FILE pointer and returns a pointer to a list
  * of mushStage types and NULL on return
  */
-mushStage parseLine(FILE *fp);
+mushStage parseLine(FILE *fp, char **in, char **out, int *stages);
 
 
 /* Determines if a character is a normal token or not
