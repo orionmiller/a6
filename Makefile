@@ -1,8 +1,8 @@
 CC = gcc
 CFLAGS = -g -pedantic -Wall 
-HDRS = #myutils.h parselib.h ttylib.h
-SRCS = #myutils.c parselib.c ttylib.c main.c
-OBJS = #myutils.o parselib.o ttylib.o main.o
+HDRS = myutils.h parselib.h #ttylib.h
+SRCS = main.c myutils.c parselib.c #ttylib.c
+OBJS = main.o myutils.o parselib.o #ttylib.o
 PRGRM = mush
 
 
@@ -13,10 +13,10 @@ $(OBJS): $(HDRS) $(SRCS)
 	$(CC) $(CFLAGS) -c $(HDRS) $(SRCS)
 
 clean:
-	rm -f *.o *#* *~
+	rm -f *.o *#* *~ *.gch
 
 allclean:
-	rm -f *.o *#* *~ $(PRGRM)
+	rm -f *.o *#* *~ *.gch $(PRGRM)
 
 test:
 	@echo 'add personal tests'
@@ -30,3 +30,5 @@ nicoTest:
 handin:
 	handin pn-cs357 asgn6 $(HDRS) $(SRCS) README Makefile
 
+val:
+	valgrind ./$(PRGRM)
