@@ -204,8 +204,6 @@ void printStage(mushStage stage, int num) {
    printf("--------\n");
    printf("Stage %d: \"%s\"\n", num, stage->command);
    printf("--------\n");
-   /*   printf("input: %s \n", stage->in);
-        printf("output: %s\n", stage->out);*/
    printf("argc: %d\n", stage->argc);
    printf("argv: ");
    for (i = 0; i < stage->argc; i++) {

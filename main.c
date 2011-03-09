@@ -23,7 +23,6 @@ int main(void) {
    FILE *in = NULL;
    FILE *out = NULL;
    int stages = 1;
-   int currentStage = 0;
    int i;
    int pipe_num = 0;
 
@@ -34,6 +33,24 @@ int main(void) {
       /*generate stages*/
       front = parseLine(stdin, inPath, outPath, &stages);
       temp = front;
+
+      /*DEBUG: Info*/
+      printf("inpath: %s\n", *inPath);
+
+      printf("outpath: %s\n", *outPath);
+
+      printf("num of pipes: %d\n", stages -1);
+      /*      i = 0;
+      while (temp) {
+         i++;
+         printStage(temp, i);
+         temp = temp->next;
+      }
+
+      temp = front;
+      */
+      fflush(stdout);
+      /*-----------*/
 
       /*generate pipes*/
       if (stages > 1) {
@@ -67,10 +84,8 @@ int main(void) {
 
             if (front->next) { /*more than 1 stage*/
                if (temp == front) { /*first stage*/
-                  //               printf("front stage\n");
-                  //               fflush(stdout);
                   if (in) {
-                     if ((dup2(fileno(in), STDIN_FILENO)) == -1) /*may be backwards*/
+                     if ((dup2(fileno(in), STDIN_FILENO)) == -1)
                         perror("1st stage dup2 in");
                   }
                   if ((dup2(newPipe[pipe_num][WRITE_END], STDOUT_FILENO)) == -1)
@@ -88,10 +103,8 @@ int main(void) {
                   }
                }
                else if (temp->next == NULL) { /*final stage*/
-                  //               printf("final stage\n");
-                  //               fflush(stdout);
                   if (out) {
-                     if ((dup2(fileno(out), STDOUT_FILENO)) == -1) /*may be backwards*/
+                     if ((dup2(fileno(out), STDOUT_FILENO)) == -1)
                         perror("last stage dup2 in");
                   }
                   if ((dup2(newPipe[pipe_num][READ_END], STDIN_FILENO)) == -1)
@@ -109,8 +122,6 @@ int main(void) {
                   }
                }
                else { /*middle stages*/
-                  //               printf("middle stage\n");
-                  //               fflush(stdout);
                   if ((dup2(newPipe[pipe_num][READ_END], STDIN_FILENO)) == -1)
                      perror("stage dup2 READ_END");
                   if ((dup2(newPipe[pipe_num+1][WRITE_END], STDOUT_FILENO)) == -1)
@@ -122,8 +133,6 @@ int main(void) {
                   if((close(newPipe[pipe_num+1][READ_END])) == -1)
                      perror("stage close READ_END 2");
                   
-                  //               printf("before loop\n");
-                  //               fflush(stdout);
                   for (i = 0; i < stages - 1; i++) {
                      if (i != pipe_num && i != pipe_num + 1) {
                         printf("i: %d pipe_num: %d \n", i, pipe_num);
@@ -140,28 +149,29 @@ int main(void) {
             }
             else { /*only one stage*/
                if (in) {
-                  if ((dup2(fileno(in), STDIN_FILENO)) == -1) /*may be backwards*/
+                  if ((dup2(fileno(in), STDIN_FILENO)) == -1)
                      perror("only 1 stage dup2 in");
                }
                if (out) {
-                  if ((dup2(fileno(out), STDOUT_FILENO)) == -1) /*may be backwards*/
+                  if ((dup2(fileno(out), STDOUT_FILENO)) == -1)
                      perror("only 1 stage dup2 out");
                }
             }
             
             /*execute*/
+            fprintf(stderr, "command: \"%s\"\n", temp->argv[0]);
+            fflush(stderr);
             execv(temp->argv[0] ,temp->argv);
-            perror("exec");
+            perror(temp->argv[0]);
             exit(EXIT_FAILURE);
             /*TODO: check for res error*/
          }
          else {
             temp = temp->next;
-            currentStage++;
          }
       }
       wait(&status);
-      if (status != 0) {
+      if (WIFEXITED(status) && WEXITSTATUS(status)) {
          perror("program child exited with an error");
       }
       if (in) {
@@ -176,14 +186,8 @@ int main(void) {
       }
       in = NULL;
       out = NULL;
-      
-      for (i = 0; i < stages - 1; i++) {
-         if((close(newPipe[i][READ_END])) == -1)
-            perror("stage close READ_END");
-         if((close(newPipe[i][WRITE_END])) == -1)
-            perror("stage close WRITE_END");
-      }
-      fflush(stdout);
+
+      fflush(stdin);
 
    return EXIT_SUCCESS;
 }
