@@ -39,11 +39,13 @@ int main(void) {
 
 
    /*DEBUG: Info*/
+   /*
    printf("inpath: %s\n", inPath);
 
    printf("outpath: %s\n", outPath);
 
    printf("num of pipes: %d\n", stages -1);
+   */
    /*      i = 0;
            while (temp) {
            i++;
@@ -84,15 +86,15 @@ int main(void) {
 
 
    if (front->next) { /*more than 1 stage*/
-      while (temp && !(forkRes=fork())) {
+      while (temp && (forkRes=fork())) {
+         if(temp->next && front != temp) 
+            pipe_num++;
          temp = temp->next;
       }
+
       /*clean up pipes*/
-      fprintf(stderr, "\"%s\": forkRes: %d\n", temp->argv[0], forkRes);
-      fflush(stderr);
-      if (forkRes) { /*child*/
-         fprintf(stderr, "%s: cleaning pipes\n", temp->argv[0]);
-         fflush(stderr);
+      if (!forkRes) { /*child*/
+
          if (temp == front) { /*first stage*/
             if (in) {
                if ((dup2(fileno(in), STDIN_FILENO)) == -1)
@@ -130,6 +132,7 @@ int main(void) {
                      perror("stage close WRITE_END");
                }
             }
+
          }
          else { /*middle stages*/
             if ((dup2(newPipe[pipe_num][READ_END], STDIN_FILENO)) == -1)
@@ -145,15 +148,12 @@ int main(void) {
                
             for (i = 0; i < stages - 1; i++) {
                if (i != pipe_num && i != pipe_num + 1) {
-                  printf("i: %d pipe_num: %d \n", i, pipe_num);
-                  fflush(stdout);
                   if((close(newPipe[i][READ_END])) == -1)
                      perror("stage close READ_END 3");
                   if((close(newPipe[i][WRITE_END])) == -1)
                      perror("stage close WRITE_END 4");
                }
             }
-            pipe_num++;
          }
       }
    }
@@ -174,18 +174,13 @@ int main(void) {
       perror(temp->argv[0]);
       exit(EXIT_FAILURE);
    }
-
    /*TODO: check for res error*/
-
 
    wait(&status);
    if (WIFEXITED(status) && WEXITSTATUS(status)) {
       perror("program child exited with an error");
    }
-   fprintf(stderr, "parent finished wait\n");
-   fflush(stderr);
-   fprintf(stdout, "parent finished wait\n");
-   fflush(stdout);
+
    if (in) {
       if((fclose(in)) != 0) {
          perror("fclose in");
