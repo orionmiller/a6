@@ -4,12 +4,18 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <termios.h>
+#include <signal.h>
 
 #include "myutils.h"
 #include "parselib.h"
 
 #define READ_END 0
 #define WRITE_END 1
+
+void handler(int signum) {
+   putc('\n', stdout); /*may change to stderr or soemthing else*/
+}
 
 int main(void) {
 
@@ -20,43 +26,48 @@ int main(void) {
    int **newPipe;
    char *inPath;
    char *outPath;
-   FILE *in = NULL;
-   FILE *out = NULL;
+   FILE *in;
+   FILE *out;
    int stages = 1;
    int i;
    int pipe_num = 0;
+   /*sigset_t mask;*/
+   struct sigaction sa;
+   sa.sa_handler = handler;
+   sigemptyset(&sa.sa_mask);
+   sa.sa_flags = 0;
 
-   fprintf(stdout, ": ");
-   fflush(stdout);
-   inPath = NULL;
-   outPath = NULL;
-   /*generate stages*/
-   front = parseLine(stdin, &inPath, &outPath, &stages);
-   if(!(temp = front)) {
+   sigprocmask(SIG_SETMASK, &sa.sa_mask, NULL);
+
+   if(-1 == sigaction(SIGINT, &sa, NULL)) {
+      perror("sigaction");
       exit(EXIT_FAILURE);
    }
-   /*modify for future use*/
+
+   /*   struct termios term;*/
+
+   while (1) {
+
+      /*      isatty(STDIN_FILENO)
+      if(isatty(fileno(stdin))) {
+         perror("standard input is not a terminal device");
+         exit(EXIT_FAILURE);
+      }
+      */
+      printf("8-P ");
+      fflush(stdout);
 
 
-   /*DEBUG: Info*/
-   /*
-   printf("inpath: %s\n", inPath);
+   inPath = NULL;
+   outPath = NULL;
+   in = NULL;
+   out = NULL;
 
-   printf("outpath: %s\n", outPath);
+   /*generate stages*/
+   front = parseLine(stdin, &inPath, &outPath, &stages);
+   if((temp = front)) {
+    
 
-   printf("num of pipes: %d\n", stages -1);
-   */
-   /*      i = 0;
-           while (temp) {
-           i++;
-           printStage(temp, i);
-           temp = temp->next;
-           }
-
-           temp = front;
-   */
-   fflush(stdout);
-   /*-----------*/
 
    /*generate pipes*/
    if (stages > 1) {
@@ -191,10 +202,11 @@ int main(void) {
          perror("fclose in");
       }
    }
-   in = NULL;
-   out = NULL;
-      
-   fflush(stdin);
-      
+
+   /*free front malloc*/  
+   }
+   }
    return EXIT_SUCCESS;
 }
+
+

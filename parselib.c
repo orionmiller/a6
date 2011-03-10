@@ -149,7 +149,7 @@ mushStage parseLine(FILE *fp, char **in, char **out, int *stages) {
 
          case END_OF_LINE:
             if (!(*(s->command))) {
-               fprintf(stderr, "invalid null command\n");
+               /*fprintf(stderr, "invalid null command\n");*/
                return NULL;
             }
 
