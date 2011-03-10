@@ -91,16 +91,25 @@ int main(int argc, char *argv[]) {
       exit(EXIT_FAILURE);
     }
 
-    /*      isatty(STDIN_FILENO)
-	    if(isatty(fileno(stdin))) {
-	    perror("standard input is not a terminal device");
-	    exit(EXIT_FAILURE);
-	    }
+    /*
+    isatty(STDIN_FILENO)
+      if(isatty(fileno(stdin))) {
+	perror("standard input is not a terminal device");
+	exit(EXIT_FAILURE);
+      }
     */
+
     if (argc == 1) {
       printf("8-P ");
       fflush(stdout);
+      if ((i=getc(stdin)) == EOF) {
+	printf("\n");
+	exit(EXIT_SUCCESS);
+      }
+      ungetc(i, stdin);
     }
+
+
     
     inPath = NULL;
     outPath = NULL;
@@ -270,6 +279,8 @@ int main(int argc, char *argv[]) {
       if (argc > 1) {
 	exit(EXIT_SUCCESS);
       }
+      printf("----\n");
+      fflush(stdout);
     }
   }
   return EXIT_SUCCESS;
