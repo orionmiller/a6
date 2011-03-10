@@ -6,6 +6,7 @@
 #include <sys/wait.h>
 #include <termios.h>
 #include <signal.h>
+#include <string.h>
 
 #include "myutils.h"
 #include "parselib.h"
@@ -15,6 +16,38 @@
 
 void handler(int signum) {
    putc('\n', stdout); /*may change to stderr or soemthing else*/
+}
+
+/* uses the given a mushStage checks to see if command (argv[0]) is "cd"
+ *    if so it will check to see if there are more than 2 argument if so it
+ *    will print an error, it also does standard errno error checkin returned
+ *    from chdir() functoin and prints appropiate error
+ * on success returns stage->next, if the command wasn't "cd" it returns stage,
+ *    on error returns NULL
+ */
+mushStage chngdir(mushStage stage) {
+   if (stage && !strcmp("cd", stage->argv[0])) { /*not sure if it should be placed elsewhere*/
+      if (stage->argc > 2) {
+         fprintf(stderr, "cd: too many arguments.\n");
+         fflush(stderr);
+         return NULL;
+      }
+      if (-1 == chdir(stage->argv[1])) {
+         perror("cd");
+         return NULL;
+      }
+      return stage->next;
+   }
+   return stage;
+}
+
+/* Takes in a mushStage structure pointer and if the argv[0] is exit then exits
+ * the current process
+ */
+void isExitTTY(mushStage stage) {
+   if (stage && !strcmp("exit", stage->argv[0])) {
+      exit(EXIT_SUCCESS);
+   }
 }
 
 int main(void) {
@@ -89,7 +122,7 @@ int main(void) {
    }
       
    if (outPath) {
-      if (!(out = fopen(outPath, "w"))) {
+      if (!(out = fopen(outPath, "w+"))) {
          perror("fopen outPath");
          exit(EXIT_FAILURE);
       }
@@ -97,10 +130,18 @@ int main(void) {
 
 
    if (front->next) { /*more than 1 stage*/
+      isExitTTY(temp);
+      temp = chngdir(temp);
       while (temp && (forkRes=fork())) {
-         if(temp->next && front != temp) 
-            pipe_num++;
-         temp = temp->next;
+         isExitTTY(temp->next);
+         if (temp != chngdir(temp)) {
+            temp = chngdir(temp);
+         }
+         else {
+            if(temp->next && front != temp) 
+               pipe_num++;
+            temp = temp->next;
+         }
       }
 
       /*clean up pipes*/
@@ -169,25 +210,33 @@ int main(void) {
       }
    }
    else { /*only one stage*/
-      if (in) {
-         if ((dup2(fileno(in), STDIN_FILENO)) == -1)
-            perror("only 1 stage dup2 in");
-      }
-      if (out) {
-         if ((dup2(fileno(out), STDOUT_FILENO)) == -1)
-            perror("only 1 stage dup2 out");
+      isExitTTY(temp);
+      temp = chngdir(temp);
+      if(temp && (forkRes=fork()))
+         temp = temp->next;
+      if (!forkRes) {
+         if (in) {
+            if ((dup2(fileno(in), STDIN_FILENO)) == -1)
+               perror("only 1 stage dup2 in");
+         }
+         if (out) {
+            if ((dup2(fileno(out), STDOUT_FILENO)) == -1)
+               perror("only 1 stage dup2 out");
+         }
       }
    }
-
+   
+   
    /*execute*/
    if (temp) {
-      execv(temp->argv[0] ,temp->argv);
+      execvp(temp->argv[0] ,temp->argv);
       perror(temp->argv[0]);
       exit(EXIT_FAILURE);
    }
    /*TODO: check for res error*/
 
    wait(&status);
+
    if (WIFEXITED(status) && WEXITSTATUS(status)) {
       perror("program child exited with an error");
    }
@@ -203,7 +252,10 @@ int main(void) {
       }
    }
 
-   /*free front malloc*/  
+   while(front) {
+      free(front);
+      front = NULL;
+   }
    }
    }
    return EXIT_SUCCESS;
