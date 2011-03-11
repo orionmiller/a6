@@ -1,2 +1,13 @@
 Michael LeKander
 Orion Miller
+
+Notes:
++ We don't have an maximum on line length, commands in a pipe, or arguments 
+  to a command. 
+
++ The redirect in and redirect out is check as per line basis and not 
+  checked at each stage.
+
+  e.g. a > e | b < c | d  is valid and redirecting in from c for stage ag
+  and redirect out to e for stage d.
+
