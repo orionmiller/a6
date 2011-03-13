@@ -1,3 +1,7 @@
+/* Contains main function
+ * handles , pipes, execution, and forking of commands
+ */
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
@@ -65,11 +69,16 @@ int main(int argc, char *argv[]) {
   int stages = 1;
   int i;
   int pipe_num = 0;
+  int pid_num = 0;
   /*sigset_t mask;*/
   struct sigaction sa;
+  sigset_t mask;
   sa.sa_handler = handler;
   sigemptyset(&sa.sa_mask);
+  sigemptyset(&mask);
   sa.sa_flags = 0;
+
+
 
   sigprocmask(SIG_SETMASK, &sa.sa_mask, NULL);
 
@@ -78,7 +87,6 @@ int main(int argc, char *argv[]) {
     exit(EXIT_FAILURE);
   }
 
-  /*   struct termios term;*/
 
   while (1) {
 
@@ -91,13 +99,6 @@ int main(int argc, char *argv[]) {
       exit(EXIT_FAILURE);
     }
 
-    /*
-    isatty(STDIN_FILENO)
-      if(isatty(fileno(stdin))) {
-	perror("standard input is not a terminal device");
-	exit(EXIT_FAILURE);
-      }
-    */
 
     if (argc == 1) {
       printf("8-P ");
@@ -118,6 +119,7 @@ int main(int argc, char *argv[]) {
 
 
     /*generate stages*/
+    stages = 1;
     front = parseLine(fp, &inPath, &outPath, &stages);
     if((temp = front)) {
 
@@ -165,7 +167,6 @@ int main(int argc, char *argv[]) {
 
 	/*clean up pipes*/
 	if (!forkRes) { /*child*/
-
 	  if (temp == front) { /*first stage*/
             if (in) {
 	      if ((dup2(fileno(in), STDIN_FILENO)) == -1)
@@ -173,16 +174,12 @@ int main(int argc, char *argv[]) {
             }
             if ((dup2(newPipe[pipe_num][WRITE_END], STDOUT_FILENO)) == -1)
 	      perror("1st stage dup2 out");
-            if((close(newPipe[pipe_num][READ_END])) == -1)
-	      perror("1st stage close READ_END");
             /*close other pipes*/
             for (i = 0; i < stages - 1; i++) {
-	      if (i != pipe_num) {
 		if((close(newPipe[i][READ_END])) == -1)
 		  perror("stage close READ_END");
 		if((close(newPipe[i][WRITE_END])) == -1)
 		  perror("stage close WRITE_END");
-	      }
             }
 	  }
 	  else if (temp->next == NULL) { /*final stage*/
@@ -192,38 +189,25 @@ int main(int argc, char *argv[]) {
             }
             if ((dup2(newPipe[pipe_num][READ_END], STDIN_FILENO)) == -1)
 	      perror("last stage dup2 out");
-            if((close(newPipe[pipe_num][WRITE_END])) == -1)
-	      perror("last stage close RITE_END");
             /*close other pipes*/
             for (i = 0; i < stages - 1; i++) {
-	      if (i != pipe_num) {
 		if((close(newPipe[i][READ_END])) == -1)
 		  perror("stage close READ_END");
 		if((close(newPipe[i][WRITE_END])) == -1)
 		  perror("stage close WRITE_END");
-	      }
             }
-
 	  }
 	  else { /*middle stages*/
             if ((dup2(newPipe[pipe_num][READ_END], STDIN_FILENO)) == -1)
 	      perror("stage dup2 READ_END");
             if ((dup2(newPipe[pipe_num+1][WRITE_END], STDOUT_FILENO)) == -1)
 	      perror("stage dup2 WRITE_END");
-               
-               
-            if((close(newPipe[pipe_num][WRITE_END])) == -1)
-	      perror("stage close WRITE_END 1");
-            if((close(newPipe[pipe_num+1][READ_END])) == -1)
-	      perror("stage close READ_END 2");
-               
+
             for (i = 0; i < stages - 1; i++) {
-	      if (i != pipe_num && i != pipe_num + 1) {
 		if((close(newPipe[i][READ_END])) == -1)
 		  perror("stage close READ_END 3");
 		if((close(newPipe[i][WRITE_END])) == -1)
 		  perror("stage close WRITE_END 4");
-	      }
             }
 	  }
 	}
@@ -235,30 +219,52 @@ int main(int argc, char *argv[]) {
 	  temp = temp->next;
 	if (!forkRes) {
 	  if (in) {
-            if ((dup2(fileno(in), STDIN_FILENO)) == -1)
+            if ((dup2(fileno(in), fileno(stdin))) == -1)
 	      perror("only 1 stage dup2 in");
 	  }
 	  if (out) {
-            if ((dup2(fileno(out), STDOUT_FILENO)) == -1)
+            if ((dup2(fileno(out), fileno(stdout))) == -1)
 	      perror("only 1 stage dup2 out");
 	  }
 	}
       }
    
-   
       /*execute*/
       if (temp) {
+	sigprocmask(SIG_SETMASK, &mask, NULL);
+	fprintf(stderr, "command: %s pid: %d pipe_num: %d\n", temp->argv[0], getpid(), pipe_num);
+	fflush(stderr);
 	execvp(temp->argv[0] ,temp->argv);
 	perror(temp->argv[0]);
 	exit(EXIT_FAILURE);
       }
+
+
+
+
       /*TODO: check for res error*/
-
-      wait(&status);
-
-      if (WIFEXITED(status) && WEXITSTATUS(status)) {
-	perror("program child exited with an error");
+      fprintf(stderr, "stages %d\n", stages);
+      for (i = 0; i < stages; i++) {
+	/*
+	if((close(newPipe[i-1][WRITE_END])) == -1)
+	  perror("stage close WRITE_END after exec");
+	if((close(newPipe[i-1][READ_END])) == -1)
+	  perror("stage close READ_END after exec");
+	*/
+	if((pid_num = wait(&status)) == -1) {
+	  fprintf(stderr, "wait error\n");
+	}
+	if(WIFEXITED(status)) {
+	  fprintf(stderr, "pid: %d child closed\n", pid_num);
+	  fflush(stderr);
+	}
+	
+	if (WIFEXITED(status) && WEXITSTATUS(status)) {
+	  perror("program child exited with an error");
+	}
       }
+
+
 
       if (in) {
 	if((fclose(in)) != 0) {
@@ -272,15 +278,13 @@ int main(int argc, char *argv[]) {
       }
 
       while(front) {
+	/*fix up freeing info*/
 	free(front);
 	front = NULL;
       }
-
       if (argc > 1) {
 	exit(EXIT_SUCCESS);
       }
-      printf("----\n");
-      fflush(stdout);
     }
   }
   return EXIT_SUCCESS;
